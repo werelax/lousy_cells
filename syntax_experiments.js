@@ -3,14 +3,6 @@
 
 var is_array = function(a) { return a.constructor == Array.prototype.constructor; }
 
-function extend(receiver, giver) {
-  for (var prop in giver) {
-    if (receiver[prop] === undefined) {
-      receiver[prop] = giver[prop];
-    }
-  }
-  return receiver;
-}
 function unextend(receiver, taker) {
   for (var prop in taker) if (taker.hasOwnProperty(prop)) {
     if (receiver[prop] !== undefined) delete receiver[prop];

@@ -1,5 +1,22 @@
 // Some helpers
 
+function extend(receiver, giver, props) {
+  if (!props) {
+    // not the most efficient way, because we are
+    // transversing the property list twice!
+    for (var prop in props) {
+      props.push(prop);
+    }
+  }
+  for (var i=0,_len=props.length; i<_len; i++) {
+    var prop = props[i];
+    if (receiver[prop] === undefined) {
+      receiver[prop] = giver[prop];
+    }
+  }
+  return receiver;
+}
+
 function unique (array) { 
   var a = [];
   var l = array.length;
@@ -47,6 +64,14 @@ var Cell = (function () {
       this.value = value;
       this.notify_change(this.id, value);
       return this.value;
+    },
+    push: function(value) {
+      is_array(this.value) || (this.value = [this.value]);
+      return this.value.push(value);
+    },
+    pop: function (value) {
+      is_array(this.value) || (this.value = [this.value]);
+      return this.value.pop(value);
     },
     observe: function(callback) {
       this.observers.push(callback);
@@ -111,6 +136,7 @@ var $C = function(arg1, arg2) {
       if (new_value !== undefined) { return cell.set(new_value);}
       else { return getter_filter ? getter_filter(cell.get()) : cell.get(); }
     }
+    extend(decorator, cell, ['push', 'pop']);
     decorator._is_cell = true;
     decorator._root_cells = [cell];
     decorator.connect = function (selector, options) { return connect_to_selector(decorator, selector, options); };
