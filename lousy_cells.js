@@ -4,7 +4,8 @@ function extend(receiver, giver, props) {
   if (!props) {
     // not the most efficient way, because we are
     // transversing the property list twice!
-    for (var prop in props) {
+    props = [];
+    for (var prop in giver) {
       props.push(prop);
     }
   }
