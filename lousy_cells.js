@@ -67,11 +67,15 @@ var Cell = (function () {
     },
     push: function(value) {
       is_array(this.value) || (this.value = [this.value]);
-      return this.value.push(value);
+      this.value.push(value);
+      this.notify_change(this.id, this.value);
+      return this.value;
     },
-    pop: function (value) {
+    pop: function () {
       is_array(this.value) || (this.value = [this.value]);
-      return this.value.pop(value);
+      var value = this.value.pop();
+      this.notify_change(this.id, this.value);
+      return value;
     },
     observe: function(callback) {
       this.observers.push(callback);
