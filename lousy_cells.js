@@ -1,6 +1,10 @@
 // Some helpers
 
-function extend(receiver, giver, props) {
+function bind(func, context) {
+  return function () { return func.apply(context, arguments); };
+}
+
+function extend(receiver, giver, props, binded) {
   if (!props) {
     // not the most efficient way, because we are
     // transversing the property list twice!
@@ -12,7 +16,11 @@ function extend(receiver, giver, props) {
   for (var i=0,_len=props.length; i<_len; i++) {
     var prop = props[i];
     if (receiver[prop] === undefined) {
-      receiver[prop] = giver[prop];
+      if (binded) {
+        receiver[prop] = bind(giver[prop], giver);
+      } else {
+        receiver[prop] = giver[prop];
+      }
     }
   }
   return receiver;
@@ -107,6 +115,7 @@ var $C = function(arg1, arg2) {
       var dep_cell = deps[i];
       dep_cell.observe(callback);
     }
+    return cell_decorator;
   };
 
   var bind_cell = function (input, fn) {
@@ -123,28 +132,15 @@ var $C = function(arg1, arg2) {
     return decorator;
   };
 
-  var connect_to_selector = function(input_cell, selector, options) {
-    var input = document.getElementById(selector);
-    var event = 'onchange';
-    var change_func = function() { input_cell(input.value); };
-    if (input.type == 'text' || input.type == 'textarea') {
-      event = 'onkeyup';
-      cahnge_func = debounce(change_func, 500);
-    }
-    input[event] = change_func;
-    return input_cell;
-  };
-
   var create_input_cell = function (value, getter_filter) {
     var cell = new Cell(value);
     var decorator = function (new_value) {
       if (new_value !== undefined) { return cell.set(new_value);}
       else { return getter_filter ? getter_filter(cell.get()) : cell.get(); }
     }
-    extend(decorator, cell, ['push', 'pop']);
+    extend(decorator, cell, ['push', 'pop'], true);
     decorator._is_cell = true;
     decorator._root_cells = [cell];
-    decorator.connect = function (selector, options) { return connect_to_selector(decorator, selector, options); };
     return decorator;
   };
 
