@@ -37,7 +37,7 @@ $C = (function($C) {
       return this;
     },
     /** precooked gatherers **/
-    getValue: function () {
+    get_value: function () {
       this._gatherer = function() { return $(this).val(); }
       return this;
     }
