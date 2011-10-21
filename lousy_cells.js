@@ -4,7 +4,16 @@ function bind(func, context) {
   return function () { return func.apply(context, arguments); };
 }
 
-function extend(receiver, giver, props, binded) {
+function is_array(a) {
+  return a.constructor == Array.prototype.constructor;
+}
+
+function extend(receiver, giver, options) {
+  options || (options = {});
+  var binded    = options.binded    || false; 
+  var props     = options.only      || false;
+  var overwrite = options.overwrite || false; 
+
   if (!props) {
     // not the most efficient way, because we are
     // transversing the property list twice!
@@ -15,12 +24,8 @@ function extend(receiver, giver, props, binded) {
   }
   for (var i=0,_len=props.length; i<_len; i++) {
     var prop = props[i];
-    if (receiver[prop] === undefined) {
-      if (binded) {
-        receiver[prop] = bind(giver[prop], giver);
-      } else {
-        receiver[prop] = giver[prop];
-      }
+    if (overwrite || receiver[prop] === undefined) {
+      receiver[prop] = (binded ? bind(giver[prop], giver) : giver[prop]);
     }
   }
   return receiver;
@@ -57,34 +62,42 @@ var debounce = (function() {
   return function(func, wait) { return limit(func, wait, true); };
 })();
 
+function decorator_for(klass, name) {
+  print("Creating decorator for " + klass.name);
+  var original = name || klass.name.toLowerCase();
+  var new_prot = {};
+  for (var prop in klass.prototype) {
+    new_prot[prop] = (function (prop) {
+      return function() {
+        print('calling: this.'+original+'.'+prop+'()...');
+        var decorated = this[original];
+        return decorated[prop].apply(decorated, arguments);
+      }
+    })(prop);
+  }
+  return new_prot;
+}
+
 // LousyCell implementation
 
 var Cell = (function () {
   var current_id = 0;
 
   function Cell(value) {
+    value || (value = '');
     this.id = current_id++;
     this.value = value;
     this.observers = [];
   };
   Cell.prototype = {
-    get: function() { return this.value; },
+    constructor: Cell,
+    get: function() {
+      return this.value; 
+    },
     set: function(value) { 
       this.value = value;
       this.notify_change(this.id, value);
       return this.value;
-    },
-    push: function(value) {
-      is_array(this.value) || (this.value = [this.value]);
-      this.value.push(value);
-      this.notify_change(this.id, this.value);
-      return this.value;
-    },
-    pop: function () {
-      is_array(this.value) || (this.value = [this.value]);
-      var value = this.value.pop();
-      this.notify_change(this.id, this.value);
-      return value;
     },
     observe: function(callback) {
       this.observers.push(callback);
@@ -102,11 +115,41 @@ var Cell = (function () {
   return Cell;
 })();
 
+function ArrayCell(cell) {
+  if (cell == undefined) return new ArrayCell(new Cell());
+  if (!is_array(cell.value)) { cell.set([]); }
+  this.cell = cell;
+};
+ArrayCell.prototype = decorator_for(Cell);
+extend(ArrayCell.prototype, {
+  constructor: ArrayCell,
+  set: function(value) {
+    this.cell.value = (is_array(value) ? value : [value]);
+  },
+  // I could implement a LOT of other interesting array operators
+  // as decorated methods (maybe using underscore)
+  push: function(value) {
+    is_array(this.cell.value) || (this.cell.value = [this.cell.value]);
+    this.cell.value.push(value);
+    this.cell.notify_change(this.cell.id, this.cell.value);
+    return this.cell.value;
+  },
+  pop: function () {
+    is_array(this.cell.value) || (this.cell.value = [this.cell.value]);
+    var value = this.cell.value.pop();
+    this.cell.notify_change(this.cell.id, this.cell.value);
+    return value;
+  },
+}, {overwrite: true});
+
+// $C facade
+
 var $C = function(arg1, arg2) {
   
   arg1 || (arg1 = '');
 
-  var is_array = function(a) { return a.constructor == Array.prototype.constructor; }
+  // only used to set the constructors of decorators
+  function DecoratedCell() { };
 
   var attach_observer = function (cell_decorator, fn) {
     var callback = function() { fn(cell_decorator()); };
@@ -118,37 +161,80 @@ var $C = function(arg1, arg2) {
     return cell_decorator;
   };
 
-  var bind_cell = function (input, fn) {
+  var bind_cell = function (input, readfn, writefn) {
     is_array(input) || (input = [input]);
-    var decorator = function() {
+    var decorator_read = function () {
       var values = input.map(function(c) { return c(); });
-      return fn ? fn.apply({}, values) : values[0];
+      return readfn ? readfn.apply({}, values) : values[0];
     }
-    decorator._is_cell = true;
+    var decorator_write = function (new_value) {
+      if (writefn) {
+        var args = [new_value];
+        args = args.concat(input);
+        return writefn.apply({}, args);
+      } else {
+        // special case: one input, no writefn
+        if (input.length == 1) return input[0](new_value);
+      }
+    };
+    var decorator = function(new_value) {
+      if (new_value) return decorator_write(new_value);
+      else return decorator_read();
+    };
+    decorator.listen = function (fn) { return attach_observer(decorator, fn); }
+    decorator.constructor = DecoratedCell;
     decorator._root_cells = input.reduce(function (r, c) { return r.concat(c._root_cells); }, []);
     decorator._root_cells = unique(decorator._root_cells);
     decorator._dependencies = input;
-    decorator.listen = function (fn) { return attach_observer(decorator, fn); }
     return decorator;
   };
 
-  var create_input_cell = function (value, getter_filter) {
+  var create_input_cell = function (value) {
     var cell = new Cell(value);
     var decorator = function (new_value) {
-      if (new_value !== undefined) { return cell.set(new_value);}
-      else { return getter_filter ? getter_filter(cell.get()) : cell.get(); }
+      if (new_value !== undefined) {
+        return cell.set(new_value);
+      } else {
+        return cell.get(); 
+      }
     }
-    extend(decorator, cell, ['push', 'pop'], true);
-    decorator._is_cell = true;
+    if (is_array(value)) {
+      cell = new ArrayCell(cell);
+      extend(decorator, decorator_for(ArrayCell, 'cell'));
+    } else {
+      extend(decorator, decorator_for(Cell));
+    }
+    decorator.cell = cell;
+    decorator.constructor = DecoratedCell;
     decorator._root_cells = [cell];
     return decorator;
   };
 
-  if (arg1._is_cell || (is_array(arg1) && typeof(arg2) == 'function')) {
+  // Overloading bullshit...
+
+  var arg1_is_cell   = arg1.constructor.name.match(/DecoratedCell/);
+  var arg1_is_cel_or_array = arg1_is_cell || is_array(arg1);
+  var arg2_is_func   = ( typeof(arg2) == 'function' );
+  var arg2_is_object = ( typeof(arg2) == 'object' );
+
+  if (!arg2 && !arg1_is_cell) {
+    // the only possible way to make an input cell
+    print("input cell created!");
+    return create_input_cell(arg1);
+  } else if (!arg2) {
+    // just a copy cell
+    return bind_cell(arg1);
+  } else if (arg2_is_func) {
+    // base cell/cells + getter_filter
     return bind_cell(arg1, arg2);
+  } else if (arg2_is_object) {
+    // base cell/cells + options object
+    var readfn  = arg2.read;
+    var writefn = arg2.write;
+    return bind_cell(arg1, readfn, writefn);
   } else {
-    return create_input_cell(arg1, arg2);
-  };
+    throw new Error("Don't know what to do with that arguments...");
+  }
 };
 
 /** Example:
