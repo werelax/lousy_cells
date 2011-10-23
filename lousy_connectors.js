@@ -70,6 +70,15 @@ $C = (function($Z) {
 			this.set(setter);
 			return this;
 		},
+    set_children: function () {
+      var setter = function(children) { 
+        var el = $(this);
+        el.html("");
+        el.append.apply(el, children); 
+      };
+      this.set(setter);
+      return this;
+    },
 		toggle_class: function (class_name) {
 			var setter = function(value) {
 				var op = value? 'addClass' : 'removeClass';
@@ -78,7 +87,15 @@ $C = (function($Z) {
 			};
 			this.set(setter);
 			return this;
-		}
+		},
+    show_hide: function () {
+      var setter = function(value) { 
+        if (value) $(this).show();
+        else $(this).hide();
+      };
+      this.set(setter);
+      return this;
+    }
 
 	};
 

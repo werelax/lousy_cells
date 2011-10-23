@@ -146,6 +146,14 @@ extend(ArrayCell.prototype, {
     this.cell.notify_change(this.cell.id, this.cell.value);
     return value;
   },
+  remove: function(item) {
+    var idx = this.cell.value.indexOf(item); 
+    if (idx > -1) {
+      this.cell.value.splice(idx, 1);
+    }
+    this.cell.notify_change(this.cell.id, this.cell.value);
+    return this.cell.value;
+  }
 }, {overwrite: true});
 
 // $C facade
@@ -184,7 +192,7 @@ var LousyZells = function(arg1, arg2) {
       }
     };
     var decorator = function(new_value) {
-      if (new_value) return decorator_write(new_value);
+      if (new_value !== undefined) return decorator_write(new_value);
       else return decorator_read();
     };
     decorator.listen = function (fn) { return attach_observer(decorator, fn); }
