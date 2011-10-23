@@ -9,3 +9,12 @@ function LousyTemp(text) {
   code = "var _t_ = []; with(obj) {" + code + "}; return _t_.join('');";
   return new Function('obj', code);
 }
+
+LousyTemp.by_id = function (id) {
+  var el = document.getElementById(id);
+  if (el) {
+    return LousyTemp(el.innerHTML);
+  } else {
+    throw new Error("LousyTemplate: Not element found with id '" + id + "'");
+  }
+};
