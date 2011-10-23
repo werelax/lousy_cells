@@ -31,6 +31,14 @@ function extend(receiver, giver, options) {
   return receiver;
 }
 
+function clean(target, properties, default_value) {
+  for (var i=0,_len=properties.length; i<_len; i++) {
+    var prop = properties[i];
+    target[prop] = default_value;
+  }
+  return target;
+}
+
 function unique (array) { 
   var a = [];
   var l = array.length;
@@ -63,13 +71,11 @@ var debounce = (function() {
 })();
 
 function decorator_for(klass, name) {
-  print("Creating decorator for " + klass.name);
   var original = name || klass.name.toLowerCase();
   var new_prot = {};
   for (var prop in klass.prototype) {
     new_prot[prop] = (function (prop) {
       return function() {
-        print('calling: this.'+original+'.'+prop+'()...');
         var decorated = this[original];
         return decorated[prop].apply(decorated, arguments);
       }
@@ -144,7 +150,7 @@ extend(ArrayCell.prototype, {
 
 // $C facade
 
-var $C = function(arg1, arg2) {
+var LousyZells = function(arg1, arg2) {
   
   arg1 || (arg1 = '');
 
@@ -153,25 +159,25 @@ var $C = function(arg1, arg2) {
 
   var attach_observer = function (cell_decorator, fn) {
     var callback = function() { fn(cell_decorator()); };
-    var deps = cell_decorator._root_cells;
-    for (var i=0, _len = deps.length; i < _len; i++) {
-      var dep_cell = deps[i];
-      dep_cell.observe(callback);
+    var deps     = cell_decorator._root_cells;
+    for (var i=0,_len=deps.length; i<_len; i++) {
+      deps[i].observe(callback);
     }
     return cell_decorator;
   };
 
-  var bind_cell = function (input, readfn, writefn) {
+  var bind_cell = function (input, readfn, writefn, owner) {
     is_array(input) || (input = [input]);
+    owner || (owner = {});
     var decorator_read = function () {
       var values = input.map(function(c) { return c(); });
-      return readfn ? readfn.apply({}, values) : values[0];
+      return readfn ? readfn.apply(owner, values) : values[0];
     }
     var decorator_write = function (new_value) {
       if (writefn) {
         var args = [new_value];
         args = args.concat(input);
-        return writefn.apply({}, args);
+        return writefn.apply(owner, args);
       } else {
         // special case: one input, no writefn
         if (input.length == 1) return input[0](new_value);
@@ -190,7 +196,7 @@ var $C = function(arg1, arg2) {
   };
 
   var create_input_cell = function (value) {
-    var cell = new Cell(value);
+    var cell      = new Cell(value);
     var decorator = function (new_value) {
       if (new_value !== undefined) {
         return cell.set(new_value);
@@ -204,9 +210,15 @@ var $C = function(arg1, arg2) {
     } else {
       extend(decorator, decorator_for(Cell));
     }
-    decorator.cell = cell;
+    // remove implementation details form de decorator
+    clean(decorator, ['get', 'set', 'observe', 'notify_change']);
+    decorator.cell        = cell;
+    // Identification of cells
     decorator.constructor = DecoratedCell;
+    // Dependencies
     decorator._root_cells = [cell];
+    // Operations
+    decorator.listen = function (fn) { return attach_observer(decorator, fn); }
     return decorator;
   };
 
@@ -219,7 +231,6 @@ var $C = function(arg1, arg2) {
 
   if (!arg2 && !arg1_is_cell) {
     // the only possible way to make an input cell
-    print("input cell created!");
     return create_input_cell(arg1);
   } else if (!arg2) {
     // just a copy cell
@@ -231,11 +242,18 @@ var $C = function(arg1, arg2) {
     // base cell/cells + options object
     var readfn  = arg2.read;
     var writefn = arg2.write;
-    return bind_cell(arg1, readfn, writefn);
+    var owner   = arg2.owner;
+    return bind_cell(arg1, readfn, writefn, owner);
   } else {
     throw new Error("Don't know what to do with that arguments...");
   }
 };
+
+// 'Static' LosyZells methods
+extend(LousyZells, {
+});
+
+var $C = LousyZells;
 
 /** Example:
 
