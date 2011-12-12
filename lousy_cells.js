@@ -1,7 +1,11 @@
 // Some helpers
 
 function bind(func, context) {
-  return function () { return func.apply(context, arguments); };
+  if (typeof(func) == 'function') {
+    return function () { return func.apply(context, arguments); };
+  } else {
+    return func;
+  }
 }
 
 function is_array(a) {
@@ -10,9 +14,9 @@ function is_array(a) {
 
 function extend(receiver, giver, options) {
   options || (options = {});
-  var binded    = options.binded    || false; 
+  var binded    = options.binded    || false;
   var props     = options.only      || false;
-  var overwrite = options.overwrite || false; 
+  var overwrite = options.overwrite || false;
 
   if (!props) {
     // not the most efficient way, because we are
@@ -31,18 +35,21 @@ function extend(receiver, giver, options) {
   return receiver;
 }
 
-function clean(target, properties, default_value) {
+function clean(target, properties, default_value, remove) {
   for (var i=0,_len=properties.length; i<_len; i++) {
     var prop = properties[i];
-    target[prop] = default_value;
+    if (remove) {
+      delete target[prop];
+    } else {
+      target[prop] = default_value;
+    }
   }
   return target;
 }
 
-function unique (array) { 
+function unique(array) {
   var a = [];
-  var l = array.length;
-  for(var i=0; i<l; i++) {
+  for(var i=0,l=array.length; i<l; i++) {
     for(var j=i+1; j<l; j++) {
       // If array[i] is found later in the array
       if (array[i] === array[j])
